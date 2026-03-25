@@ -1,0 +1,82 @@
+# Living AI System — Production Dependencies
+# Install with: pip install -r requirements.txt --break-system-packages
+
+# ─── Web Framework ────────────────────────────────────────────────────────────
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.7.0
+python-multipart==0.0.20
+websockets==14.1
+
+# ─── Database ─────────────────────────────────────────────────────────────────
+asyncpg==0.30.0
+sqlalchemy[asyncio]==2.0.36
+alembic==1.14.0
+redis==5.2.1
+celery==5.4.0
+
+# ─── Vector Store ─────────────────────────────────────────────────────────────
+chromadb==0.6.3
+sentence-transformers==3.3.1
+
+# ─── Machine Learning Core ────────────────────────────────────────────────────
+torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
+numpy==2.2.0
+scipy==1.14.1
+
+# ─── Continual and Meta Learning ─────────────────────────────────────────────
+avalanche-lib==0.6.0
+peft==0.14.0
+transformers==4.47.1
+
+# ─── Graph Neural Networks ────────────────────────────────────────────────────
+torch-geometric==2.6.1
+networkx==3.4.2
+
+# ─── Vision ───────────────────────────────────────────────────────────────────
+opencv-python-headless==4.10.0.84
+Pillow==11.0.0
+ultralytics==8.3.52
+
+# ─── Audio ────────────────────────────────────────────────────────────────────
+openai-whisper==20240930
+librosa==0.10.2.post1
+soundfile==0.12.1
+pyaudio==0.2.14
+
+# ─── Monitoring and Logging ───────────────────────────────────────────────────
+structlog==24.4.0
+psutil==6.1.1
+prometheus-client==0.21.1
+
+# ─── Security ─────────────────────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+cryptography==44.0.0
+
+# ─── Async and HTTP ───────────────────────────────────────────────────────────
+httpx==0.28.1
+anyio==4.7.0
+aiofiles==24.1.0
+
+# ─── Browser Automation ───────────────────────────────────────────────────────
+playwright==1.49.0
+
+# ─── Knowledge and Reasoning ─────────────────────────────────────────────────
+faiss-cpu==1.9.0.post1
+rank-bm25==0.2.2
+
+# ─── Evolutionary ─────────────────────────────────────────────────────────────
+deap==1.4.1
+
+# ─── Bayesian ─────────────────────────────────────────────────────────────────
+scikit-learn==1.6.0
+GPy==1.13.2
+
+# ─── Utilities ────────────────────────────────────────────────────────────────
+python-dotenv==1.0.1
+tenacity==9.0.0
+ujson==5.10.0
