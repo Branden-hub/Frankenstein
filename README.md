@@ -11,41 +11,7 @@ The system unifies every AI architecture type, every machine learning paradigm, 
 
 PHASE 0 — Project structure and controller
 The controller is the central nervous system. It is the file through which all modules are connected. It routes inputs to the correct modules, aggregates their outputs, and manages the flow of information through the system.
-Project structure:
-living_ai/
-├── controller/
-│   ├── main.py                  # Master controller — routes all inputs to modules
-│   ├── router.py                # Determines which modules to activate per input
-│   └── aggregator.py            # Combines outputs from multiple active modules
-├── modules/
-│   ├── neural_networks/         # Every neural network architecture
-│   ├── learning_paradigms/      # Every learning method
-│   ├── graph_networks/          # Every graph neural network type
-│   ├── generative/              # Every generative architecture
-│   ├── memory/                  # Five tier memory system
-│   ├── sensory/                 # Eyes, Ears
-│   ├── voice/                   # Voice output
-│   ├── hands/                   # Code execution, browser, APIs, file operations
-│   ├── feet/                    # Navigation, digital and physical
-│   ├── reasoning/               # Planning, chain of thought, multi-agent
-│   ├── skills/                  # Skill registry and learned behaviors
-│   ├── knowledge/               # Knowledge graph, world model, retrieval
-│   ├── homeostasis/             # Continuous execution, pruning, consolidation
-│   └── permissions/             # Capability gates, audit log
-├── backend/
-│   ├── api/                     # FastAPI — chat, tasks, memory, health endpoints
-│   ├── websocket/               # Streaming response manager
-│   └── db/                      # PostgreSQL async, Redis, session management
-├── frontend/
-│   ├── src/
-│   │   ├── ChatPanel.tsx        # Chat interface with streaming token display
-│   │   ├── TaskPanel.tsx        # Task submission and status
-│   │   ├── MemoryBrowser.tsx    # Memory tier viewer and search
-│   │   └── SystemStatus.tsx     # Live system health display
-├── docker-compose.yml
-├── .env.example
-├── requirements.txt
-└── launch.ps1
+
 
 PHASE 1 — Neural network modules
 Every neural network architecture exists as its own module under modules/neural_networks/. Each module contains its own fully implemented forward pass, training logic, and connection interface to the controller.
