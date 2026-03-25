@@ -1,0 +1,277 @@
+"""
+Living AI System — Master Controller
+The Game of Infinite Paths: all possible inputs exist simultaneously.
+The controller is the filter that routes each input to the correct modules,
+applies all active filters, and reveals the correct output through their intersection.
+"""
+
+import asyncio
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import structlog
+from pydantic import BaseModel
+
+from controller.router import Router
+from controller.aggregator import Aggregator
+from modules.homeostasis.cee import ContinuousExecutionEnvironment
+from modules.memory.working import WorkingMemory
+from modules.memory.episodic import EpisodicMemory
+from modules.memory.knowledge import KnowledgeBase
+from modules.permissions.gates import CapabilityGate
+
+log = structlog.get_logger(__name__)
+
+
+class InputMessage(BaseModel):
+    id: str
+    timestamp: str
+    session_id: str
+    content: str
+    modality: str  # text, image, audio, code, task
+    trace_id: str
+
+
+class OutputMessage(BaseModel):
+    id: str
+    timestamp: str
+    session_id: str
+    trace_id: str
+    content: str
+    modules_activated: list[str]
+    confidence: float
+    metadata: dict[str, Any]
+
+
+class MasterController:
+    """
+    The master controller is the intersection point of all filters.
+    Every input passes through the router, activates the appropriate modules,
+    and the aggregator reveals the correct output from their combined outputs.
+    """
+
+    def __init__(self):
+        self.router = Router()
+        self.aggregator = Aggregator()
+        self.working_memory = WorkingMemory()
+        self.episodic_memory = EpisodicMemory()
+        self.knowledge_base = KnowledgeBase()
+        self.capability_gate = CapabilityGate()
+        self.cee: ContinuousExecutionEnvironment | None = None
+        self._running = False
+        self._sessions: dict[str, dict] = {}
+
+    async def start(self) -> None:
+        """Start the controller and all background systems."""
+        log.info("master_controller.starting")
+
+        # Initialise all subsystems
+        await self.working_memory.initialise()
+        await self.episodic_memory.initialise()
+        await self.knowledge_base.initialise()
+        await self.router.initialise()
+
+        # Start the Continuous Execution Environment daemon
+        self.cee = ContinuousExecutionEnvironment(
+            working_memory=self.working_memory,
+            episodic_memory=self.episodic_memory,
+            knowledge_base=self.knowledge_base,
+        )
+        asyncio.create_task(self.cee.run())
+
+        self._running = True
+        log.info("master_controller.started")
+
+    async def stop(self) -> None:
+        """Gracefully shut down all systems."""
+        log.info("master_controller.stopping")
+        self._running = False
+        if self.cee:
+            await self.cee.stop()
+        log.info("master_controller.stopped")
+
+    async def process(self, message: InputMessage) -> OutputMessage:
+        """
+        Core processing pipeline.
+        Input enters the infinite path space.
+        Router determines which module filters to activate.
+        Each module applies its filter.
+        Aggregator reveals the correct output from the intersection.
+        """
+        log.info(
+            "controller.process",
+            trace_id=message.trace_id,
+            session_id=message.session_id,
+            modality=message.modality,
+        )
+
+        # Update working memory with new input
+        await self.working_memory.add(
+            session_id=message.session_id,
+            role="user",
+            content=message.content,
+            trace_id=message.trace_id,
+        )
+
+        # Retrieve relevant context from episodic and knowledge stores
+        episodic_context = await self.episodic_memory.retrieve(
+            query=message.content,
+            session_id=message.session_id,
+            top_k=5,
+        )
+        knowledge_context = await self.knowledge_base.retrieve(
+            query=message.content,
+            top_k=5,
+        )
+
+        # Route to appropriate modules
+        routing_decision = await self.router.route(
+            message=message,
+            episodic_context=episodic_context,
+            knowledge_context=knowledge_context,
+        )
+
+        # Check capability gates for all required capabilities
+        for capability in routing_decision.required_capabilities:
+            if not self.capability_gate.check(capability, message.session_id):
+                log.warning(
+                    "controller.capability_denied",
+                    capability=capability,
+                    trace_id=message.trace_id,
+                )
+                routing_decision.required_capabilities.remove(capability)
+                routing_decision.modules = [
+                    m for m in routing_decision.modules
+                    if capability not in m.required_capabilities
+                ]
+
+        # Execute all activated modules and collect their outputs
+        module_outputs = await asyncio.gather(
+            *[
+                module.execute(
+                    message=message,
+                    episodic_context=episodic_context,
+                    knowledge_context=knowledge_context,
+                    working_memory=await self.working_memory.get_context(
+                        message.session_id
+                    ),
+                )
+                for module in routing_decision.modules
+            ],
+            return_exceptions=True,
+        )
+
+        # Filter out exceptions and log them
+        valid_outputs = []
+        for i, output in enumerate(module_outputs):
+            if isinstance(output, Exception):
+                log.error(
+                    "controller.module_error",
+                    module=routing_decision.modules[i].name,
+                    error=str(output),
+                    trace_id=message.trace_id,
+                )
+            else:
+                valid_outputs.append(output)
+
+        # Aggregate all module outputs into final response
+        aggregated = await self.aggregator.aggregate(
+            outputs=valid_outputs,
+            routing_decision=routing_decision,
+            message=message,
+        )
+
+        # Store response in working memory
+        await self.working_memory.add(
+            session_id=message.session_id,
+            role="assistant",
+            content=aggregated.content,
+            trace_id=message.trace_id,
+        )
+
+        # Queue episodic encoding for consolidation
+        await self.episodic_memory.queue_for_encoding(
+            session_id=message.session_id,
+            user_input=message.content,
+            assistant_output=aggregated.content,
+            trace_id=message.trace_id,
+        )
+
+        output = OutputMessage(
+            id=str(uuid.uuid4()),
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            session_id=message.session_id,
+            trace_id=message.trace_id,
+            content=aggregated.content,
+            modules_activated=[m.name for m in routing_decision.modules],
+            confidence=aggregated.confidence,
+            metadata=aggregated.metadata,
+        )
+
+        log.info(
+            "controller.process_complete",
+            trace_id=message.trace_id,
+            modules_activated=output.modules_activated,
+            confidence=output.confidence,
+        )
+
+        return output
+
+    async def process_stream(self, message: InputMessage):
+        """
+        Streaming version of process — yields tokens as they are generated.
+        Used by the WebSocket handler for real-time chat responses.
+        """
+        # Update working memory
+        await self.working_memory.add(
+            session_id=message.session_id,
+            role="user",
+            content=message.content,
+            trace_id=message.trace_id,
+        )
+
+        episodic_context = await self.episodic_memory.retrieve(
+            query=message.content,
+            session_id=message.session_id,
+            top_k=5,
+        )
+        knowledge_context = await self.knowledge_base.retrieve(
+            query=message.content,
+            top_k=5,
+        )
+
+        routing_decision = await self.router.route(
+            message=message,
+            episodic_context=episodic_context,
+            knowledge_context=knowledge_context,
+        )
+
+        full_response = []
+
+        # Stream from the primary language module
+        primary_module = routing_decision.primary_module
+        async for token in primary_module.stream(
+            message=message,
+            episodic_context=episodic_context,
+            knowledge_context=knowledge_context,
+            working_memory=await self.working_memory.get_context(message.session_id),
+        ):
+            full_response.append(token)
+            yield token
+
+        # Store complete response
+        complete_response = "".join(full_response)
+        await self.working_memory.add(
+            session_id=message.session_id,
+            role="assistant",
+            content=complete_response,
+            trace_id=message.trace_id,
+        )
+        await self.episodic_memory.queue_for_encoding(
+            session_id=message.session_id,
+            user_input=message.content,
+            assistant_output=complete_response,
+            trace_id=message.trace_id,
+        )
